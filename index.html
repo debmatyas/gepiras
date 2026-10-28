@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>10 Ujjas Gépelésgyakorló (Magyar)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Inter:wght@400;600;700&display=swap');
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+    }
+    .font-mono-code {
+      font-family: 'Fira Code', monospace;
+    }
+
+    /* Key Finger Colors */
+    .finger-lp { border-bottom: 3px solid #ec4899; }
+    .finger-lr { border-bottom: 3px solid #a855f7; }
+    .finger-lm { border-bottom: 3px solid #3b82f6; }
+    .finger-li { border-bottom: 3px solid #10b981; }
+    .finger-ri { border-bottom: 3px solid #eab308; }
+    .finger-rm { border-bottom: 3px solid #f97316; }
+    .finger-rr { border-bottom: 3px solid #ef4444; }
+    .finger-rp { border-bottom: 3px solid #06b6d4; }
+    .finger-thumb { border-bottom: 3px solid #64748b; }
+
+    .key-active {
+      background-color: #38bdf8 !important;
+      color: #0f172a !important;
+      transform: translateY(2px);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.6) !important;
+      font-weight: bold;
+    }
+
+    .char-untouched {
+      color: #94a3b8;
+    }
+    .char-correct {
+      color: #4ade80;
+    }
+    .char-incorrect {
+      color: #f87171;
+      background-color: rgba(239, 68, 68, 0.25);
+      border-radius: 2px;
+    }
+    .char-current {
+      border-bottom: 3px solid #38bdf8;
+      background-color: rgba(56, 189, 248, 0.2);
+      animation: pulse 1.5s infinite;
+    }
+
+    /* Fixed height for 4 lines scrolling: font-size 1.5rem (24px) * line-height 1.625 (39px) * 4 = 156px + padding */
+    .four-line-container {
+      max-height: 204px;
+      overflow-y: hidden;
+      scroll-behavior: smooth;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between p-4 md:p-8">
+
+  <!-- Header & Settings -->
+  <header class="w-full max-w-4xl flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+        10 Ujjas Gépelésgyakorló
+      </h1>
+      <p class="text-xs text-slate-400">Gyakorold a vakírást magyar nyelven (Automata 4 soros görgetéssel)</p>
+    </div>
+
+    <!-- Controls & TXT Import -->
+    <div class="flex items-center gap-3">
+      <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-xl border border-slate-700 text-xs font-semibold transition flex items-center gap-1.5">
+        📁 TXT Betöltés
+        <input type="file" id="txt-file-input" accept=".txt" class="hidden" onchange="loadCustomTxt(event)">
+      </label>
+
+      <!-- Difficulty selector -->
+      <div class="flex items-center gap-2 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700">
+        <button onclick="setDifficulty('easy')" id="btn-easy" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white">Kezdő</button>
+        <button onclick="setDifficulty('medium')" id="btn-medium" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white">Haladó</button>
+        <button onclick="setDifficulty('hard')" id="btn-hard" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-blue-600 text-white">Mester</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Stats Bar -->
+  <div class="w-full max-w-4xl grid grid-cols-4 gap-3 mb-6">
+    <div class="bg-slate-800/60 border border-slate-700/60 p-3 rounded-xl text-center">
+      <span class="text-xs text-slate-400 block uppercase tracking-wider">Sebesség</span>
+      <span id="stat-wpm" class="text-xl md:text-2xl font-bold text-cyan-400">0</span> <span class="text-xs text-slate-500">WPM</span>
+    </div>
+    <div class="bg-slate-800/60 border border-slate-700/60 p-3 rounded-xl text-center">
+      <span class="text-xs text-slate-400 block uppercase tracking-wider">Pontosság</span>
+      <span id="stat-acc" class="text-xl md:text-2xl font-bold text-emerald-400">100</span> <span class="text-xs text-slate-500">%</span>
+    </div>
+    <div class="bg-slate-800/60 border border-slate-700/60 p-3 rounded-xl text-center">
+      <span class="text-xs text-slate-400 block uppercase tracking-wider">Hibák</span>
+      <span id="stat-errors" class="text-xl md:text-2xl font-bold text-rose-400">0</span>
+    </div>
+    <div class="bg-slate-800/60 border border-slate-700/60 p-3 rounded-xl text-center">
+      <span class="text-xs text-slate-400 block uppercase tracking-wider">Idő</span>
+      <span id="stat-time" class="text-xl md:text-2xl font-bold text-amber-400">0</span> <span class="text-xs text-slate-500">mp</span>
+    </div>
+  </div>
+
+  <!-- Text Display Area (Max 4 lines, Auto Smooth Scroll) -->
+  <main class="w-full max-w-4xl mb-6">
+    <div id="text-container" onclick="focusInput()" class="four-line-container relative bg-slate-800/90 border-2 border-slate-700 rounded-2xl p-6 flex items-start justify-start flex-wrap font-mono-code text-xl md:text-2xl leading-relaxed cursor-text select-none shadow-xl">
+      <!-- Generated text renders here -->
+    </div>
+    <input type="text" id="hidden-input" class="opacity-0 absolute -z-10" autocomplete="off" capitalize="off" spellcheck="false">
+    
+    <!-- Finger Guide Indicator -->
+    <div class="mt-3 flex items-center justify-between text-xs text-slate-400 px-2">
+      <div id="finger-hint" class="font-medium text-cyan-400 flex items-center gap-2">
+        Következő ujj: <span id="finger-name" class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 font-bold text-white">-</span>
+      </div>
+      <button onclick="resetTest()" class="flex items-center gap-1 hover:text-white transition">
+        🔄 Újraindítás (Esc)
+      </button>
+    </div>
+  </main>
+
+  <!-- Virtual Keyboard (Hungarian QWERTZ) -->
+  <div class="w-full max-w-4xl bg-slate-900/90 border border-slate-800 p-3 md:p-4 rounded-2xl shadow-2xl overflow-x-auto">
+    <div class="min-w-[700px] flex flex-col gap-1.5 font-mono-code text-xs select-none">
+      
+      <!-- Row 1 -->
+      <div class="flex gap-1 justify-center">
+        <div id="key-0" class="key finger-lp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">0 §</div>
+        <div id="key-1" class="key finger-lp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">1 '</div>
+        <div id="key-2" class="key finger-lr w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">2 "</div>
+        <div id="key-3" class="key finger-lm w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">3 +</div>
+        <div id="key-4" class="key finger-li w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">4 !</div>
+        <div id="key-5" class="key finger-li w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">5 %</div>
+        <div id="key-6" class="key finger-ri w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">6 /</div>
+        <div id="key-7" class="key finger-ri w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">7 =</div>
+        <div id="key-8" class="key finger-rm w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">8 (</div>
+        <div id="key-9" class="key finger-rr w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">9 )</div>
+        <div id="key-ö" class="key finger-rp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">Ö</div>
+        <div id="key-ü" class="key finger-rp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">Ü</div>
+        <div id="key-ó" class="key finger-rp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">Ó</div>
+        <div id="key-Backspace" class="w-16 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700 text-[10px] text-slate-400">Törlés</div>
+      </div>
+
+      <!-- Row 2 -->
+      <div class="flex gap-1 justify-center">
+        <div class="w-12 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700 text-[10px] text-slate-400">Tab</div>
+        <div id="key-q" class="key finger-lp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">Q</div>
+        <div id="key-w" class="key finger-lr w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">W</div>
+        <div id="key-e" class="key finger-lm w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">E</div>
+        <div id="key-r" class="key finger-li w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">R</div>
+        <div id="key-t" class="key finger-li w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">T</div>
+        <div id="key-z" class="key finger-ri w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">Z</div>
+        <div id="key-u" class="key finger-ri w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">U</div>
+        <div id="key-i" class="key finger-rm w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">I</div>
+        <div id="key-o" class="key finger-rr w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">O</div>
+        <div id="key-p" class="key finger-rp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">P</div>
+        <div id="key-ő" class="key finger-rp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">Ő</div>
+        <div id="key-ú" class="key finger-rp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">Ú</div>
+        <div id="key-Enter" class="w-14 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700 text-[10px] text-slate-400">Enter</div>
+      </div>
+
+      <!-- Row 3 -->
+      <div class="flex gap-1 justify-center">
+        <div class="w-14 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700 text-[10px] text-slate-400">Caps</div>
+        <div id="key-a" class="key finger-lp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">A</div>
+        <div id="key-s" class="key finger-lr w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">S</div>
+        <div id="key-d" class="key finger-lm w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">D</div>
+        <div id="key-f" class="key finger-li w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700 relative">F<span class="absolute bottom-1 w-1.5 h-0.5 bg-slate-400 rounded-full"></span></div>
+        <div id="key-g" class="key finger-li w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">G</div>
+        <div id="key-h" class="key finger-ri w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">H</div>
+        <div id="key-j" class="key finger-ri w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700 relative">J<span class="absolute bottom-1 w-1.5 h-0.5 bg-slate-400 rounded-full"></span></div>
+        <div id="key-k" class="key finger-rm w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">K</div>
+        <div id="key-l" class="key finger-rr w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">L</div>
+        <div id="key-é" class="key finger-rp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">É</div>
+        <div id="key-á" class="key finger-rp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">Á</div>
+        <div id="key-ű" class="key finger-rp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">Ű</div>
+      </div>
+
+      <!-- Row 4 -->
+      <div class="flex gap-1 justify-center">
+        <div id="key-Shift" class="w-16 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700 text-[10px] text-slate-400">Shift</div>
+        <div id="key-í" class="key finger-lp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">Í</div>
+        <div id="key-y" class="key finger-lp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">Y</div>
+        <div id="key-x" class="key finger-lr w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">X</div>
+        <div id="key-c" class="key finger-lm w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">C</div>
+        <div id="key-v" class="key finger-li w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">V</div>
+        <div id="key-b" class="key finger-li w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">B</div>
+        <div id="key-n" class="key finger-ri w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">N</div>
+        <div id="key-m" class="key finger-ri w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">M</div>
+        <div id="key-," class="key finger-rm w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">,</div>
+        <div id="key-." class="key finger-rr w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">.</div>
+        <div id="key--" class="key finger-rp w-9 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700">-</div>
+        <div id="key-Shift" class="w-20 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700 text-[10px] text-slate-400">Shift</div>
+      </div>
+
+      <!-- Row 5 -->
+      <div class="flex gap-1 justify-center">
+        <div id="key- " class="key finger-thumb w-64 h-10 rounded bg-slate-800 flex items-center justify-center border border-slate-700 text-xs text-slate-400">Szóköz</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <footer class="mt-4 w-full max-w-4xl flex flex-wrap justify-center gap-4 text-[11px] text-slate-400">
+    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-pink-500"></span> Bal kisujj</div>
+    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-purple-500"></span> Bal gyűrűs</div>
+    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-blue-500"></span> Bal középső</div>
+    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-emerald-500"></span> Bal mutató</div>
+    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-yellow-500"></span> Jobb mutató</div>
+    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-orange-500"></span> Jobb középső</div>
+    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-red-500"></span> Jobb gyűrűs</div>
+    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-cyan-500"></span> Jobb kisujj</div>
+    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-slate-500"></span> Hüvelykujj</div>
+  </footer>
+
+  <script>
+    // 30 Hosszabb magyar szöveg gyakorláshoz
+    const LONG_TEXTS = [
+      "A magyar nyelv finnugor eredetű, amelynek egyedi struktúrája és gazdag toldalékrendszere különleges helyet biztosít számára a világ nyelvei között. A nyelvújítás korában számos új szót hoztak létre a tudósok és írók, amelyek ma is szerves részét képezik a mindennapi kommunikációnak.",
+      "A vakírás elsajátítása alapvető fontosságú mindazok számára, akik hatékonyan szeretnének dolgozni a modern számítógépes környezetben. A tízujjas gépelés nemcsak a munkavégzés sebességét növeli meg jelentősen, hanem csökkenti a kéz és a csukló fizikai terhelését is a hosszú órák során.",
+      "A budapesti Lánchíd építése a tizenkilencedik század egyik legjelentősebb mérnöki teljesítménye volt, amely összekötötte a főváros két oldalát. Széchenyi István kezdeményezése nyomán a hidat William Tierney Clark tervezte és Adam Clark irányításával építették fel, maradandó szimbólumot teremtve.",
+      "A mesterséges intelligencia fejlődése radikálisan átalakítja a mindennapi életünket, a munkahelyi folyamatoktól kezdve egészen a szórakoztató iparig. Az algoritmusok képesek hatalmas adatmennyiségek elemzésére, mintázatok felismerésére és automatizált döntéshozatalra az emberiség segítésére.",
+      "A Balaton a közép-európai régió legnagyobb tava, amely népszerű turisztikai célpont mind a hazai, mind a külföldi utazók körében. A sekély déli part ideális a családok számára, míg az északi part tanúhegyei és borkultúrája a természetjáróknak és a gasztronómia kedvelőinek nyújt élményeket.",
+      "A sikeres időgazdálkodás kulcsa a feladatok megfelelő priorizálásában és a felesleges zavaró tényezők határozott kiszűrésében rejlik. Ha megtanuljuk beosztani a napi energiánkat, nemcsak hatékonyabbak leszünk a munkánkban, hanem több szabadidőnk is marad a pihenésre és a hobbijainkra.",
+      "A magyar népmesék világa mélyen gyökerezik az ősi kultúrában, és generációkon átívelő morális tanulságokat közvetít a hallgatóság számára. A szegénylegény kitartása, a bölcs öregasszony tanácsai és a sárkányokkal való küzdelem mind az élet alapvető kihívásait szimbolizálják.",
+      "A rendszeres testmozgás és az egészséges táplálkozás elengedhetetlen feltétele a hosszú, kiegyensúlyozott és energikus élet megőrzésének. Már napi harminc perc séta vagy könnyű fizikai aktivitás is érezhetően javítja a hangulatot, megelőzi a betegségeket és növeli a szellemi teljesítőképességet.",
+      "A könyvtárak évszázadokon keresztül az emberi tudás legfőbb őrzőiként szolgáltak, megvédve a fontos dokumentumokat az utókor számára. A digitális korban a funkciójuk átalakult, de továbbra is a csendes tanulás, a kutatás és a közösségi találkozások elengedhetetlen helyszínei maradtak.",
+      "A tavaszi időszak beköszöntével a természet újjáéled, a mezők virágba borulnak, és az erdők ismét megtelnek az énekesmadarak hangjával. A melegedő időjárás arra ösztönzi az embereket, hogy minél több időt töltsenek a szabadban, kiránduljanak és feltöltődjenek a friss levegőn.",
+      "A gyorsaság és a pontosság egyszerre történő fejlesztése komoly kihívást jelent minden gépelni tanuló kezdő és haladó diák számára. Kezdetben érdemes kizárólag a helyes ujjrendre és a hibátlan leütésekre figyelni, mert a sebesség a folyamatos gyakorlás hatására magától is növekedni fog.",
+      "A digitális átállás kihívásai elé állítják a hagyományos oktatási intézményeket, amelyeknek alkalmazkodniuk kell a modern elvárásokhoz. Az interaktív eszközök, a hibrid tanulási formák és az online tananyagok integrálása lehetővé teszi a diákok személyre szabottabb fejlesztését.",
+      "A tudományos kutatások alapvető célja a természet és az univerzum működésének megismerése, valamint az emberi életminőség javítása. Az elméleti felfedezések idővel olyan gyakorlati technológiákká formálódnak, amelyek gyökeresen megváltoztatják az orvostudományt és az ipart.",
+      "A zene hallgatása bizonyítottan pozitív hatással van a stressz-szintre, fokozza a kreativitást és javítja a koncentrációs képességet. A különböző stílusok eltérő érzelmeket váltanak ki belőlünk, így a dallamok képesek megnyugtatni a zaklatott elmét vagy éppen energiát adni a feladatokhoz.",
+      "A magyar konyha híres a fűszeres ételeiről, a gazdag gulyáslevesről, a paprikás csirkéről és a világszerte ismert finom desszertekről. A minőségi alapanyagok használata és a hagyományos receptek tisztelete biztosítja, hogy a magyar gasztronómia mindig különleges helyet foglaljon el.",
+      "A csillagászat iránt érdeklődők számára a tiszta éjszakai égbolt lenyűgöző látványt nyújt, felfedve a távoli galaxisok csodáit. Egy egyszerű távcső segítségével is megfigyelhetjük a Hold krátereit, a Jupiter holdjait vagy a Szaturnusz gyűrűjét, átélve a világegyetem végtelenségét.",
+      "A fenntartható fejlődés és a környezetvédelem napjaink legfontosabb globális kérdései közé tartoznak a jövő generációiért. Az energiatakarékosság, a hulladékcsökkentés és a megújuló erőforrások használata mind hozzájárulnak a bolygónk törékeny egyensúlyának megőrzéséhez.",
+      "A történelmi emlékhelyek látogatása segít jobban megérteni a múlt eseményeit és a nemzeti identitásunk kialakulásának folyamatát. A várromok, múzeumok és emlékművek mesélnek az előttünk járt generációk küzdelmeiről, sikereiről és a kultúra ápolásának fontosságáról.",
+      "A programozás logikus gondolkodást, kreatív problémamegoldást és hatalmas adag kitartást igényel a fejlesztőktől. Egy-egy összetett szoftver megírása során a kód tisztasága és a hatékony struktúra kiválasztása kulcsfontosságú a hosszú távú fenntarthatóság szempontjából.",
+      "A Gutenberg-galaxis a könyvnyomtatás feltalálásával teljesen megváltoztatta az emberiség kultúráját és az információ terjedésének sebességét. A nyomtatott betű demokratizálta a tudást, lehetővé téve, hogy a szélesebb néprétegek is hozzáférjenek a tudományos és irodalmi művekhez.",
+      "A sportesemények közös szurkolása összehozza az embereket, közösségi élményt teremtve a különböző kultúrájú és hátterű egyének között. A győzelem öröme és a vereség méltóságteljes feldolgozása olyan értékeket tanít meg, amelyek a mindennapi életben is rendkívül hasznosak.",
+      "A belső építészet és a lakberendezés célja, hogy a lakóterek ne csak esztétikusak, hanem maximálisan funkcionálisak is legyenek. A természetes fény kihasználása, a harmonikus színpaletta és a kényelmes bútorok együttesen teremtenek igazán otthonos és inspiráló környezetet.",
+      "A fotózás művészete abban rejlik, hogy megörökíti a múló pillanatot, átadva a fotós egyedi látásmódját és érzelmeit. A fények és árnyékok játéka, a kompozíció precizitása és a megfelelő pillanat kivárása mind hozzájárulnak egy felejthetetlen kép megszületéséhez.",
+      "A gazdasági folyamatok elemzése és a piacon történő eligazodás alapvető ismereteket követel meg a modern üzleti élet szereplőitől. A globális ellátási láncok, a pénzügyi döntések és az innovációk folyamatos nyomon követése szükséges a versenyképesség megőrzéséhez.",
+      "A kávézás kultúrája évezredes múltra tekint vissza, és a világ számos pontján fontos társasági rituálévá vált az évek során. A frissen őrölt kávébabok illata és a gondosan elkészített ital nemcsak felébreszti a testet, hanem alkalmat ad a kötetlen beszélgetésekre is.",
+      "A hegymászás fizikai és mentális szempontból is próbára teszi az embert, miközben lenyűgöző panorámával jutalmazza a kitartókat. A megfelelő felszerelés, az időjárási körülmények tiszteletben tartása és a saját korlátaink ismerete elengedhetetlen a biztonságos túrázáshoz.",
+      "A pszichológia tudománya mélyebb betekintést enged az emberi viselkedés mozgatórugóiba és a lelki folyamatok működésébe. Az önismeret fejlesztése segíti a konfliktusok kezelését, a hatékonyabb kommunikációt és az empátia elmélyítését embertársaink iránt.",
+      "A modern okostelefonok olyan zsebszámítógépek, amelyek összekötik a világot, és hozzáférést biztosítanak az összes információhoz. Az azonnali üzenetküldés, a navigáció és a digitális szolgáltatások kényelmesebbé teszik a mindennapokat, de fontos a tudatos használatuk is.",
+      "A kreatív írás nagyszerű módja a belső gondolatok kifejezésének, a képzelet szárnyalásának és az íráskészség csiszolásának. A történetek megalkotása során új világokat építhetünk fel, karaktereket formálhatunk meg és izgalmas cselekményszálakat szőhetünk.",
+      "A sikeres csapatmunka alapja a kölcsönös bizalom, a nyílt kommunikáció és a közös célokért való felelősségvállalás. Amikor a csapattagok kiegészítik egymás képességeit és támogatják egymást a nehézségekben, a végeredmény messze felülmúlja az egyéni teljesítményeket."
+    ];
+
+    const EASY_WORDS = ["asdf", "jklé", "fghj", "kaszál", "falka", "saláta", "hallatszik", "haldoklik", "faggat", "saját", "fajta", "dalol", "halad", "oldal"];
+    const MEDIUM_WORDS = ["alma", "korty", "program", "számítógép", "billentyűzet", "magyarország", "fejlesztés", "tanulás", "gyakorlás", "okostelefon", "internet", "ablak", "rendszer", "lehetőség"];
+
+    // Key to Finger Mapping
+    const FINGER_MAP = {
+      'y': 'Bal kisujj', '1': 'Bal kisujj', 'q': 'Bal kisujj', 'a': 'Bal kisujj', 'í': 'Bal kisujj', '0': 'Bal kisujj',
+      'x': 'Bal gyűrűs', '2': 'Bal gyűrűs', 'w': 'Bal gyűrűs', 's': 'Bal gyűrűs',
+      'c': 'Bal középső', '3': 'Bal középső', 'e': 'Bal középső', 'd': 'Bal középső',
+      'v': 'Bal mutató', 'b': 'Bal mutató', '4': 'Bal mutató', '5': 'Bal mutató', 'r': 'Bal mutató', 't': 'Bal mutató', 'f': 'Bal mutató', 'g': 'Bal mutató',
+      'n': 'Jobb mutató', 'm': 'Jobb mutató', '6': 'Jobb mutató', '7': 'Jobb mutató', 'z': 'Jobb mutató', 'u': 'Jobb mutató', 'h': 'Jobb mutató', 'j': 'Jobb mutató',
+      ',': 'Jobb középső', '8': 'Jobb középső', 'i': 'Jobb középső', 'k': 'Jobb középső',
+      '.': 'Jobb gyűrűs', '9': 'Jobb gyűrűs', 'o': 'Jobb gyűrűs', 'l': 'Jobb gyűrűs',
+      '-': 'Jobb kisujj', 'ö': 'Jobb kisujj', 'ü': 'Jobb kisujj', 'ó': 'Jobb kisujj', 'p': 'Jobb kisujj', 'ő': 'Jobb kisujj', 'ú': 'Jobb kisujj', 'é': 'Jobb kisujj', 'á': 'Jobb kisujj', 'ű': 'Jobb kisujj',
+      ' ': 'Hüvelykujj'
+    };
+
+    // State Variables
+    let currentDifficulty = 'hard';
+    let targetText = "";
+    let currentIndex = 0;
+    let errors = 0;
+    let totalTyped = 0;
+    let startTime = null;
+    let timerInterval = null;
+    let isFinished = false;
+
+    // DOM Elements
+    const textContainer = document.getElementById('text-container');
+    const hiddenInput = document.getElementById('hidden-input');
+    const statWpm = document.getElementById('stat-wpm');
+    const statAcc = document.getElementById('stat-acc');
+    const statErrors = document.getElementById('stat-errors');
+    const statTime = document.getElementById('stat-time');
+    const fingerName = document.getElementById('finger-name');
+
+    window.onload = () => {
+      resetTest();
+      focusInput();
+    };
+
+    function focusInput() {
+      hiddenInput.focus();
+    }
+
+    function setDifficulty(level) {
+      currentDifficulty = level;
+      ['easy', 'medium', 'hard'].forEach(l => {
+        const btn = document.getElementById(`btn-${l}`);
+        if (l === level) {
+          btn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-blue-600 text-white";
+        } else {
+          btn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white";
+        }
+      });
+      resetTest();
+    }
+
+    function generateText() {
+      if (currentDifficulty === 'easy') {
+        let words = [];
+        for (let i = 0; i < 10; i++) {
+          words.push(EASY_WORDS[Math.floor(Math.random() * EASY_WORDS.length)]);
+        }
+        return words.join(' ');
+      } else if (currentDifficulty === 'medium') {
+        let words = [];
+        for (let i = 0; i < 15; i++) {
+          words.push(MEDIUM_WORDS[Math.floor(Math.random() * MEDIUM_WORDS.length)]);
+        }
+        return words.join(' ');
+      } else {
+        return LONG_TEXTS[Math.floor(Math.random() * LONG_TEXTS.length)];
+      }
+    }
+
+    function loadCustomTxt(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        let content = e.target.result.trim();
+        if (content) {
+          targetText = content.replace(/\s+/g, ' ');
+          resetTestStateOnly();
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    // Render text with word-wrap wrappers
+    function renderText() {
+      textContainer.innerHTML = '';
+      textContainer.scrollTop = 0;
+      
+      const words = targetText.split(' ');
+      let charGlobalIndex = 0;
+
+      words.forEach((word, wordIndex) => {
+        const wordSpan = document.createElement('span');
+        wordSpan.className = 'inline-flex flex-wrap mr-[0.4em] mb-1';
+
+        for (let i = 0; i < word.length; i++) {
+          const charSpan = document.createElement('span');
+          charSpan.innerText = word[i];
+          charSpan.id = `char-${charGlobalIndex}`;
+          charSpan.className = 'char-untouched';
+          if (charGlobalIndex === 0) charSpan.className = 'char-current';
+          wordSpan.appendChild(charSpan);
+          charGlobalIndex++;
+        }
+
+        if (wordIndex < words.length - 1) {
+          const spaceSpan = document.createElement('span');
+          spaceSpan.innerText = ' ';
+          spaceSpan.id = `char-${charGlobalIndex}`;
+          spaceSpan.className = 'char-untouched';
+          wordSpan.appendChild(spaceSpan);
+          charGlobalIndex++;
+        }
+
+        textContainer.appendChild(wordSpan);
+      });
+
+      updateKeyboardHighlight();
+    }
+
+    // Scroll active character into view within the 4-line viewport
+    function scrollActiveCharIntoView() {
+      const activeChar = document.getElementById(`char-${currentIndex}`);
+      if (!activeChar) return;
+
+      const containerRect = textContainer.getBoundingClientRect();
+      const charRect = activeChar.getBoundingClientRect();
+
+      // If active character goes below 3rd line height (~130px from container top), smooth scroll down
+      const relativeTop = charRect.top - containerRect.top;
+      
+      if (relativeTop > 120) {
+        textContainer.scrollTop += (relativeTop - 80);
+      } else if (relativeTop < 20 && textContainer.scrollTop > 0) {
+        textContainer.scrollTop += (relativeTop - 20);
+      }
+    }
+
+    function resetTestStateOnly() {
+      clearInterval(timerInterval);
+      timerInterval = null;
+      startTime = null;
+      currentIndex = 0;
+      errors = 0;
+      totalTyped = 0;
+      isFinished = false;
+
+      statWpm.innerText = '0';
+      statAcc.innerText = '100';
+      statErrors.innerText = '0';
+      statTime.innerText = '0';
+
+      renderText();
+      hiddenInput.value = '';
+      focusInput();
+    }
+
+    function resetTest() {
+      targetText = generateText();
+      resetTestStateOnly();
+    }
+
+    function startTimer() {
+      startTime = new Date();
+      timerInterval = setInterval(() => {
+        const elapsedSeconds = Math.floor((new Date() - startTime) / 1000);
+        statTime.innerText = elapsedSeconds;
+        calculateStats(elapsedSeconds);
+      }, 1000);
+    }
+
+    function calculateStats(elapsedSeconds) {
+      if (elapsedSeconds <= 0) return;
+      
+      const wordsTyped = (currentIndex) / 5;
+      const minutes = elapsedSeconds / 60;
+      const wpm = Math.round(wordsTyped / minutes);
+      
+      const accuracy = totalTyped > 0 
+        ? Math.max(0, Math.round(((totalTyped - errors) / totalTyped) * 100)) 
+        : 100;
+
+      statWpm.innerText = isNaN(wpm) || wpm < 0 ? 0 : wpm;
+      statAcc.innerText = accuracy;
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (isFinished) return;
+
+      if (e.key === 'Escape') {
+        resetTest();
+        return;
+      }
+
+      focusInput();
+
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        if (currentIndex > 0) {
+          const currentSpan = document.getElementById(`char-${currentIndex}`);
+          if (currentSpan) {
+            currentSpan.className = 'char-untouched';
+          }
+
+          currentIndex--;
+
+          const prevSpan = document.getElementById(`char-${currentIndex}`);
+          if (prevSpan) {
+            prevSpan.className = 'char-current';
+          }
+
+          updateKeyboardHighlight();
+          scrollActiveCharIntoView();
+        }
+      }
+    });
+
+    hiddenInput.addEventListener('input', (e) => {
+      if (isFinished) return;
+
+      if (!startTime) {
+        startTimer();
+      }
+
+      const inputVal = hiddenInput.value;
+      if (!inputVal) return;
+      
+      const typedChar = inputVal[inputVal.length - 1];
+      hiddenInput.value = '';
+
+      const currentCharSpan = document.getElementById(`char-${currentIndex}`);
+      const expectedChar = targetText[currentIndex];
+
+      totalTyped++;
+
+      if (typedChar === expectedChar) {
+        currentCharSpan.className = 'char-correct';
+      } else {
+        currentCharSpan.className = 'char-incorrect';
+        errors++;
+        statErrors.innerText = errors;
+      }
+
+      currentIndex++;
+
+      if (currentIndex >= targetText.length) {
+        finishTest();
+        return;
+      }
+
+      const nextCharSpan = document.getElementById(`char-${currentIndex}`);
+      if (nextCharSpan) {
+        nextCharSpan.className = 'char-current';
+      }
+
+      updateKeyboardHighlight();
+      scrollActiveCharIntoView();
+    });
+
+    function updateKeyboardHighlight() {
+      document.querySelectorAll('.key-active').forEach(k => k.classList.remove('key-active'));
+
+      if (currentIndex >= targetText.length) return;
+
+      const nextChar = targetText[currentIndex].toLowerCase();
+      
+      const finger = FINGER_MAP[nextChar] || 'Ismeretlen';
+      fingerName.innerText = finger;
+
+      let keyId = `key-${nextChar}`;
+      if (nextChar === ' ') keyId = 'key- ';
+
+      const keyElement = document.getElementById(keyId);
+      if (keyElement) {
+        keyElement.classList.add('key-active');
+      }
+
+      const rawChar = targetText[currentIndex];
+      if (rawChar !== rawChar.toLowerCase() && rawChar.match(/[A-ZÁÉÍÓÖŐÚÜŰ]/)) {
+        const shiftKeys = document.querySelectorAll('#key-Shift');
+        shiftKeys.forEach(s => s.classList.add('key-active'));
+        fingerName.innerText = `${finger} + Shift`;
+      }
+    }
+
+    function finishTest() {
+      clearInterval(timerInterval);
+      isFinished = true;
+
+      const elapsedSeconds = Math.max(1, Math.floor((new Date() - startTime) / 1000));
+      calculateStats(elapsedSeconds);
+
+      setTimeout(() => {
+        alert(`🎉 Szép munka!\n\nSebesség: ${statWpm.innerText} WPM\nPontosság: ${statAcc.innerText}%\nHibák: ${errors}\nIdő: ${elapsedSeconds} mp`);
+        resetTest();
+      }, 100);
+    }
+  </script>
+</body>
+</html>
